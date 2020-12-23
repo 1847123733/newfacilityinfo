@@ -1,0 +1,403 @@
+<template>
+  <div class="app-container">
+    <el-form :model="queryParams" ref="queryForm" :inline="true" v-show="showSearch" >
+      <el-form-item label="车辆类型" prop="carType">
+        <el-select v-model="queryParams.carType" placeholder="请选择车辆类型" clearable size="small">
+          <el-option v-for="item in vehicletypelist" :label="item.dictLabel" :value="item.dictValue"/>
+        </el-select>
+      </el-form-item>
+      <el-form-item label="车牌号" prop="carNumber">
+        <el-input
+          v-model="queryParams.carNumber"
+          placeholder="请输入车牌号"
+          clearable
+          size="small"
+          @keyup.enter.native="handleQuery"
+        />
+      </el-form-item>
+      <el-form-item label="所属人姓名" prop="ownerName">
+        <el-input
+          v-model="queryParams.ownerName"
+          placeholder="请输入所属人姓名"
+          clearable
+          size="small"
+          @keyup.enter.native="handleQuery"
+        />
+      </el-form-item>
+      <el-form-item label="所属人手机号" prop="ownerTel">
+        <el-input
+          v-model="queryParams.ownerTel"
+          placeholder="请输入所属人手机号"
+          clearable
+          size="small"
+          @keyup.enter.native="handleQuery"
+        />
+      </el-form-item>
+
+      <el-form-item>
+        <el-button type="cyan" icon="el-icon-search" size="mini" @click="handleQuery">搜索</el-button>
+        <el-button icon="el-icon-refresh" size="mini" @click="resetQuery">重置</el-button>
+      </el-form-item>
+    </el-form>
+
+    <el-row :gutter="10" class="mb8">
+      <el-col :span="1.5">
+        <el-button
+          type="primary"
+          icon="el-icon-plus"
+          size="mini"
+          @click="handleAdd"
+          v-hasPermi="['business:carinfo:add']"
+        >新增</el-button>
+      </el-col>
+      <el-col :span="1.5">
+        <el-button
+          type="success"
+          icon="el-icon-edit"
+          size="mini"
+          :disabled="single"
+          @click="handleUpdate"
+          v-hasPermi="['business:carinfo:edit']"
+        >修改</el-button>
+      </el-col>
+      <el-col :span="1.5">
+        <el-button
+          type="danger"
+          icon="el-icon-delete"
+          size="mini"
+          :disabled="multiple"
+          @click="handleDelete"
+          v-hasPermi="['business:carinfo:remove']"
+        >删除</el-button>
+      </el-col>
+      <el-col :span="1.5">
+        <el-button
+          type="warning"
+          icon="el-icon-download"
+          size="mini"
+          @click="handleExport"
+          v-hasPermi="['business:carinfo:export']"
+        >导出</el-button>
+      </el-col>
+	  <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
+    </el-row>
+
+    <el-table v-loading="loading" :data="carinfoList" @selection-change="handleSelectionChange" border>
+      <el-table-column type="selection" width="55" align="center" />
+      <el-table-column label="序号" align="center" type="index" width="50" />
+<!--      <el-table-column label="主键" align="center" prop="carId" />-->
+      <el-table-column label="车辆类型" align="center" prop="carType" width="100" show-overflow-tooltip>
+        <template slot-scope="scope">
+          <span>{{scope.row.carType | rounding(vehicletypelist)}}</span>
+        </template>
+      </el-table-column>
+<!--      <el-table-column label="所属用户主键" align="center" prop="ownerId" />-->
+      <el-table-column label="车牌号" align="center" prop="carNumber" width="120" show-overflow-tooltip/>
+      <el-table-column label="所属人姓名" align="center" prop="ownerName" width="100" show-overflow-tooltip/>
+      <el-table-column label="所属人手机号" align="center" prop="ownerTel" width="120"  show-overflow-tooltip/>
+      <el-table-column label="所属人地址" align="center" prop="ownerAddress"  show-overflow-tooltip/>
+      <el-table-column label="备注" align="center" prop="remark"  show-overflow-tooltip/>
+      <el-table-column label="操作" align="center" width="190" class-name="small-padding fixed-width">
+        <template slot-scope="scope">
+          <el-button
+            size="mini"
+            type="text"
+            icon="el-icon-edit"
+            @click="handleUpdate(scope.row)"
+            v-hasPermi="['business:carinfo:edit']"
+          >修改</el-button>
+          <el-button
+            size="mini"
+            type="text"
+            icon="el-icon-delete"
+            @click="handleDelete(scope.row)"
+            v-hasPermi="['business:carinfo:remove']"
+          >删除</el-button>
+        </template>
+      </el-table-column>
+    </el-table>
+
+    <pagination
+      v-show="total>0"
+      :total="total"
+      :page.sync="queryParams.pageNum"
+      :limit.sync="queryParams.pageSize"
+      @pagination="getList"
+    />
+
+    <!-- 添加或修改车辆信息对话框 -->
+    <el-dialog :title="title" :visible.sync="open" width="500px" append-to-body :close-on-click-modal="false">
+      <el-form ref="form" :model="form" :rules="rules" label-width="100px">
+        <el-form-item label="车辆类型" prop="carType">
+          <el-select v-model="form.carType" placeholder="请选择车辆类型" @change="clchange">
+            <el-option v-for="item in vehicletypelist" :label="item.dictLabel" :value="item.dictValue"/>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="业主" prop="personName" v-show="vehiclezt">
+<!--          <el-input v-model="form.personName" placeholder="请选择业主" />-->
+          <el-select v-model="form.personName" placeholder="请选择业主" @change="yezchange">
+            <el-option v-for="item in personinfoList" :label="item.personName" :value="item.personId"/>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="车牌号" prop="carNumber" >
+          <el-input v-model="form.carNumber" placeholder="请输入车牌号" />
+        </el-form-item>
+        <el-form-item label="所属人姓名" prop="ownerName">
+          <el-input v-model="form.ownerName" placeholder="请输入所属人姓名" />
+        </el-form-item>
+        <el-form-item label="所属人手机号" prop="ownerTel">
+          <el-input v-model="form.ownerTel" placeholder="请输入所属人手机号" />
+        </el-form-item>
+        <el-form-item label="所属人地址" prop="ownerAddress">
+          <el-input v-model="form.ownerAddress" type="textarea" placeholder="请输入所属人地址" />
+        </el-form-item>
+<!--        <el-form-item label="删除标志" prop="delFlag">-->
+<!--          <el-input v-model="form.delFlag" placeholder="请输入删除标志" />-->
+<!--        </el-form-item>-->
+        <el-form-item label="备注" prop="remark">
+          <el-input v-model="form.remark" type="textarea" placeholder="请输入内容" />
+        </el-form-item>
+      </el-form>
+      <div slot="footer" class="dialog-footer">
+        <el-button type="primary" @click="submitForm">确 定</el-button>
+        <el-button @click="cancel">取 消</el-button>
+      </div>
+    </el-dialog>
+  </div>
+</template>
+
+<script>
+import { listCarinfo, getCarinfo, delCarinfo, addCarinfo, updateCarinfo, exportCarinfo } from "@/api/business/carinfo";
+import { listPersoninfo } from "@/api/business/personinfo";
+
+export default {
+  name: "Carinfo",
+  data() {
+    return {
+      // 遮罩层
+      loading: true,
+      // 选中数组
+      ids: [],
+      // 非单个禁用
+      single: true,
+      // 非多个禁用
+      multiple: true,
+      // 显示搜索条件
+      showSearch: true,
+      // 总条数
+      total: 0,
+      // 车辆信息表格数据
+      carinfoList: [],
+      // 弹出层标题
+      title: "",
+      // 是否显示弹出层
+      open: false,
+      // 查询参数
+      queryParams: {
+        pageNum: 1,
+        pageSize: 10,
+        carType: null,
+        ownerId: null,
+        carNumber: null,
+        ownerName: null,
+        ownerTel: null,
+        ownerAddress: null,
+      },
+      // 表单参数
+      form: {},
+      // 表单校验
+      rules: {
+      },
+      // 车辆类型
+      vehicletypelist:[],
+      // 业主信息
+      personinfoList:[],
+      // 当前选择的业主信息
+      personinfoLists:{},
+      vehiclezt:false
+
+    };
+  },
+  created() {
+    // vehicle_type
+    this.getList();
+    this.getyezList();
+    // 车辆类型 - 字典
+    this.getDicts("vehicle_type").then(response => {
+      this.vehicletypelist = response.data;
+
+    });
+  },
+  methods: {
+    /** 查询车辆信息列表 */
+    getList() {
+      this.loading = true;
+      listCarinfo(this.queryParams).then(response => {
+        this.carinfoList = response.rows;
+        this.total = response.total;
+        this.loading = false;
+      });
+    },
+    /** 查询业主信息列表 */
+    getyezList() {
+      this.loading = true;
+      listPersoninfo().then(response => {
+        this.personinfoList = response.rows
+        this.loading = false;
+      });
+    },
+    // 切换车辆类别
+    clchange(val){
+      this.form.personName = ''
+    },
+    // 切换业务信息
+    yezchange(val){
+      console.log(val,'切换业务信息')
+
+      listPersoninfo({
+        personId:val
+      }).then(response => {
+        this.personinfoLists = response.rows[0]
+        console.log(this.personinfoLists,'切换业务信息例表')
+        // this.form = Object.assign({}, this.personinfoLists);
+        this.form.carNumber = this.personinfoLists.carNumber
+        this.form.ownerName = this.personinfoLists.ownerName
+        this.form.ownerTel = this.personinfoLists.ownerTel
+        this.form.ownerAddress = this.personinfoLists.ownerAddress
+        // console.log(this.form)
+        this.loading = false;
+      });
+    },
+    // 取消按钮
+    cancel() {
+      this.open = false;
+      this.reset();
+    },
+    // 表单重置
+    reset() {
+      this.form = {
+        carId: null,
+        carType: null,
+        ownerId: null,
+        carNumber: null,
+        ownerName: null,
+        ownerTel: null,
+        ownerAddress: null,
+        delFlag: null,
+        createBy: null,
+        createTime: null,
+        updateBy: null,
+        updateTime: null,
+        remark: null
+      };
+      this.resetForm("form");
+    },
+    /** 搜索按钮操作 */
+    handleQuery() {
+      this.queryParams.pageNum = 1;
+      this.getList();
+    },
+    /** 重置按钮操作 */
+    resetQuery() {
+      this.resetForm("queryForm");
+      this.handleQuery();
+    },
+    // 多选框选中数据
+    handleSelectionChange(selection) {
+      this.ids = selection.map(item => item.carId)
+      this.single = selection.length!==1
+      this.multiple = !selection.length
+    },
+    /** 新增按钮操作 */
+    handleAdd() {
+      this.reset();
+      this.open = true;
+      this.title = "添加车辆信息";
+    },
+    /** 修改按钮操作 */
+    handleUpdate(row) {
+      this.reset();
+      const carId = row.carId || this.ids
+      getCarinfo(carId).then(response => {
+        this.form = response.data;
+        this.open = true;
+        this.title = "修改车辆信息";
+      });
+    },
+    /** 提交按钮 */
+    submitForm() {
+      this.$refs["form"].validate(valid => {
+        if (valid) {
+          if (this.form.carId != null) {
+            updateCarinfo(this.form).then(response => {
+              this.msgSuccess("修改成功");
+              this.open = false;
+              this.getList();
+            });
+          } else {
+            addCarinfo(this.form).then(response => {
+              this.msgSuccess("新增成功");
+              this.open = false;
+              this.getList();
+            });
+          }
+        }
+      });
+    },
+    /** 删除按钮操作 */
+    handleDelete(row) {
+      const carIds = row.carId || this.ids;
+      this.$confirm('是否确认删除车辆信息编号为"' + carIds + '"的数据项?', "警告", {
+          confirmButtonText: "确定",
+          cancelButtonText: "取消",
+          type: "warning"
+        }).then(function() {
+          return delCarinfo(carIds);
+        }).then(() => {
+          this.getList();
+          this.msgSuccess("删除成功");
+        })
+    },
+    /** 导出按钮操作 */
+    handleExport() {
+      const queryParams = this.queryParams;
+      this.$confirm('是否确认导出所有车辆信息数据项?', "警告", {
+          confirmButtonText: "确定",
+          cancelButtonText: "取消",
+          type: "warning"
+        }).then(function() {
+          return exportCarinfo(queryParams);
+        }).then(response => {
+          this.download(response.msg);
+        })
+    }
+  },
+  filters:{
+    rounding(val,productTypeOptions){
+      if (productTypeOptions.length ===0) return
+      else {
+        console.log(productTypeOptions,'产品类别1')
+        let newarr = productTypeOptions.filter((item,index,arr)=>{
+          return item.dictValue == val;
+        })
+        // console.log(newarr)
+        if (newarr.length == 0){
+          return val
+        }else {
+          return newarr[0].dictLabel
+        }
+      }
+    }
+  },
+  watch:{
+    "form.carType"(newval){
+      console.log(newval,'车辆类别')
+      if (newval == "A1"){
+        this.vehiclezt = true
+      }else {
+        this.vehiclezt = false
+      }
+    }
+  }
+};
+</script>

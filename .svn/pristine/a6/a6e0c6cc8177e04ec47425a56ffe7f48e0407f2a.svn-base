@@ -1,0 +1,418 @@
+<template>
+  <div class="app-container">
+    <el-form :model="queryParams" ref="queryForm" :inline="true" v-show="showSearch" label-width="68px">
+      <el-form-item label="软件版本" prop="versionCode">
+        <el-input
+          v-model="queryParams.versionCode"
+          placeholder="请输入软件版本"
+          clearable
+          size="small"
+          @keyup.enter.native="handleQuery"
+        />
+      </el-form-item>
+      <el-form-item label="版本" prop="versionName">
+        <el-input
+          v-model="queryParams.versionName"
+          placeholder="请输入版本"
+          clearable
+          size="small"
+          @keyup.enter.native="handleQuery"
+        />
+      </el-form-item>
+
+<!--      <el-form-item label="产品id" prop="productId">-->
+<!--        <el-input-->
+<!--          v-model="queryParams.productId"-->
+<!--          placeholder="请输入产品id"-->
+<!--          clearable-->
+<!--          size="small"-->
+<!--          @keyup.enter.native="handleQuery"-->
+<!--        />-->
+<!--      </el-form-item>-->
+      <el-form-item label="升级状态" prop="visible">
+
+<!--        <el-input-->
+<!--          v-model="queryParams.visible"-->
+<!--          placeholder="请输入升级状态"-->
+<!--          clearable-->
+<!--          size="small"-->
+<!--          @keyup.enter.native="handleQuery"-->
+<!--        />-->
+        <el-select v-model="queryParams.visible" placeholder="请选择升级状态" clearable size="small">
+          <el-option v-for="dict in updateStatus"
+                     :key="dict.dictValue"
+                     :label="dict.dictLabel"
+                     :value="dict.dictValue" />
+        </el-select>
+      </el-form-item>
+      <el-form-item label="版本状态" prop="status">
+        <el-select v-model="queryParams.status" placeholder="请选择版本状态" clearable size="small">
+          <el-option v-for="dict in statusOptions"
+                     :key="dict.dictValue"
+                     :label="dict.dictLabel"
+                     :value="dict.dictValue" />
+        </el-select>
+      </el-form-item>
+      <el-form-item>
+        <el-button type="cyan" icon="el-icon-search" size="mini" @click="handleQuery">搜索</el-button>
+        <el-button icon="el-icon-refresh" size="mini" @click="resetQuery">重置</el-button>
+      </el-form-item>
+    </el-form>
+
+    <el-row :gutter="10" class="mb8">
+      <el-col :span="1.5">
+        <el-button
+          type="primary"
+          icon="el-icon-plus"
+          size="mini"
+          @click="handleAdd"
+          v-hasPermi="['manage:version:add']"
+        >新增</el-button>
+      </el-col>
+      <el-col :span="1.5">
+        <el-button
+          type="success"
+          icon="el-icon-edit"
+          size="mini"
+          :disabled="single"
+          @click="handleUpdate"
+          v-hasPermi="['manage:version:edit']"
+        >修改</el-button>
+      </el-col>
+      <el-col :span="1.5">
+        <el-button
+          type="danger"
+          icon="el-icon-delete"
+          size="mini"
+          :disabled="multiple"
+          @click="handleDelete"
+          v-hasPermi="['manage:version:remove']"
+        >删除</el-button>
+      </el-col>
+      <el-col :span="1.5">
+        <el-button
+          type="warning"
+          icon="el-icon-download"
+          size="mini"
+          @click="handleExport"
+          v-hasPermi="['manage:version:export']"
+        >导出</el-button>
+      </el-col>
+	  <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
+    </el-row>
+
+    <el-table v-loading="loading" :data="versionList" @selection-change="handleSelectionChange">
+      <el-table-column type="selection" width="55" align="center" />
+<!--      <el-table-column label="主键" align="center" prop="versionId" />-->
+      <el-table-column label="序号" align="center" type="index" width="50" />
+      <el-table-column label="软件版本" align="center" prop="versionCode" />
+      <el-table-column label="版本" align="center" prop="versionName" />
+      <el-table-column label="升级改动点描述" align="center" prop="updateDescribe" />
+      <el-table-column label="下载地址" align="center" prop="softwareUrl" />
+      <el-table-column label="文件md5值" align="center" prop="softwareMd5" />
+      <el-table-column label="产品名称" align="center" prop="productName" />
+      <el-table-column label="升级状态" align="center" prop="visible" >
+        <template slot-scope="scope">
+          <el-tag type="success" v-if="scope.row.visible === '1'">允许升级</el-tag>
+          <el-tag type="danger" v-if="scope.row.visible === '0'">不允许升级</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="版本状态" align="center" prop="status" >
+        <template slot-scope="scope">
+          <el-tag type="success" v-if="scope.row.status === '1'">升级中</el-tag>
+          <el-tag type="danger" v-if="scope.row.status === '2'">升级完成</el-tag>
+          <el-tag  v-if="scope.row.status === '0'">原始状态</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="备注" align="center" prop="remark" />
+      <el-table-column label="操作" align="center" width="200" class-name="small-padding fixed-width">
+        <template slot-scope="scope">
+          <el-button
+            size="mini"
+            type="text"
+            icon="el-icon-edit"
+            @click="handleUpdate(scope.row)"
+            v-hasPermi="['manage:version:edit']"
+          >修改</el-button>
+          <el-button
+            size="mini"
+            type="text"
+            icon="el-icon-s-marketing"
+            @click="upgradeEquipment(scope.row)"
+          >升级设备</el-button>
+          <el-button
+            size="mini"
+            type="text"
+            icon="el-icon-delete"
+            @click="handleDelete(scope.row)"
+            v-hasPermi="['manage:version:remove']"
+          >删除</el-button>
+        </template>
+      </el-table-column>
+    </el-table>
+
+    <pagination
+      v-show="total>0"
+      :total="total"
+      :page.sync="queryParams.pageNum"
+      :limit.sync="queryParams.pageSize"
+      @pagination="getList"
+    />
+
+    <!-- 添加或修改软件升级版本信息对话框 -->
+    <el-dialog :title="title" :visible.sync="open" width="500px" append-to-body :close-on-click-modal="false">
+      <el-form ref="form" :model="form" :rules="rules" label-width="110px">
+        <el-form-item label="软件版本" prop="versionCode">
+          <el-input v-model="form.versionCode" placeholder="请输入软件版本" />
+        </el-form-item>
+        <el-form-item label="版本" prop="versionName">
+          <el-input v-model="form.versionName" placeholder="请输入版本" />
+        </el-form-item>
+        <el-form-item label="升级改动点描述" prop="updateDescribe">
+          <el-input v-model="form.updateDescribe" type="textarea" placeholder="请输入内容" />
+        </el-form-item>
+        <el-form-item label="下载地址" prop="softwareUrl">
+          <el-input v-model="form.softwareUrl" placeholder="请输入下载地址" />
+        </el-form-item>
+        <el-form-item label="文件md5值" prop="softwareMd5">
+          <el-input v-model="form.softwareMd5" placeholder="请输入文件md5值" />
+        </el-form-item>
+        <el-form-item label="产品名称" prop="productId">
+          <el-select v-model="form.productId" placeholder="请选择产品名称">
+            <el-option
+              v-for="item in listProduct"
+              :key="item.productId"
+              :label="item.productName"
+              :value="item.productId"
+            />
+          </el-select>
+<!--          <el-input v-model="form.productId" placeholder="请输入产品id" />-->
+        </el-form-item>
+        <el-form-item label="升级状态" prop="visible">
+<!--          <el-input v-model="form.visible" placeholder="请输入升级状态" />-->
+          <el-radio-group v-model="form.visible">
+            <el-radio label="1">允许升级</el-radio>
+            <el-radio label="0">不允许升级</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="版本状态">
+          <el-radio-group v-model="form.status">
+            <el-radio label="1">升级中</el-radio>
+            <el-radio label="2">升级完成</el-radio>
+            <el-radio label="0">原始状态</el-radio>
+          </el-radio-group>
+        </el-form-item>
+<!--        <el-form-item label="删除标志" prop="delFlag">-->
+<!--          <el-input v-model="form.delFlag" placeholder="请输入删除标志" />-->
+<!--        </el-form-item>-->
+        <el-form-item label="备注" prop="remark">
+          <el-input v-model="form.remark" type="textarea" placeholder="请输入内容" />
+        </el-form-item>
+      </el-form>
+      <div slot="footer" class="dialog-footer">
+        <el-button type="primary" @click="submitForm">确 定</el-button>
+        <el-button @click="cancel">取 消</el-button>
+      </div>
+    </el-dialog>
+  </div>
+</template>
+
+<script>
+import { listVersion, getVersion, delVersion, addVersion, updateVersion, exportVersion } from "@/api/manage/version";
+import { listProduct } from "@/api/manage/product";
+
+export default {
+  name: "Version",
+  data() {
+    return {
+      // 遮罩层
+      loading: true,
+      // 选中数组
+      ids: [],
+      // 非单个禁用
+      single: true,
+      // 非多个禁用
+      multiple: true,
+      // 显示搜索条件
+      showSearch: true,
+      // 总条数
+      total: 0,
+      // 软件升级版本信息表格数据
+      versionList: [],
+      //通用状态数据字典
+      statusOptions: [],
+      //通用状态数据字典
+      updateStatus: [],
+      // 产品id名称
+      listProduct:[],
+      // 弹出层标题
+      title: "",
+      // 是否显示弹出层
+      open: false,
+      // 查询参数
+      queryParams: {
+        pageNum: 1,
+        pageSize: 10,
+        versionCode: null,
+        versionName: null,
+        updateDescribe: null,
+        softwareUrl: null,
+        softwareMd5: null,
+        productId: null,
+        visible: null,
+        status: null,
+      },
+      // 表单参数
+      form: {},
+      // 表单校验
+      rules: {
+      }
+    };
+  },
+  created() {
+    this.getList();
+    this.getProduct();
+    this.getDicts("status_of_release").then(response => {
+      this.statusOptions = response.data;
+    });
+    this.getDicts("update_status").then(response => {
+      this.updateStatus = response.data;
+    });
+  },
+  methods: {
+    /** 查询软件升级版本信息列表 */
+    getList() {
+      this.loading = true;
+      listVersion(this.queryParams).then(response => {
+        this.versionList = response.rows;
+        this.total = response.total;
+        this.loading = false;
+      });
+    },
+    /** 查询软件升级版本信息列表 */
+    getProduct() {
+      this.loading = true;
+      listProduct().then(response => {
+
+        this.listProduct = response.rows;
+        console.log(this.listProduct,'产品信息')
+        // this.total = response.total;
+        this.loading = false;
+      });
+    },
+    // 取消按钮
+    cancel() {
+      this.open = false;
+      this.reset();
+    },
+    // 表单重置
+    reset() {
+      this.form = {
+        versionId: null,
+        versionCode: null,
+        versionName: null,
+        updateDescribe: null,
+        softwareUrl: null,
+        softwareMd5: null,
+        productId: null,
+        visible: '0',
+        status: "0",
+        delFlag: null,
+        createBy: null,
+        createTime: null,
+        updateBy: null,
+        updateTime: null,
+        remark: null
+      };
+      this.resetForm("form");
+    },
+    /** 搜索按钮操作 */
+    handleQuery() {
+      this.queryParams.pageNum = 1;
+      this.getList();
+    },
+    /** 重置按钮操作 */
+    resetQuery() {
+      this.resetForm("queryForm");
+      this.handleQuery();
+    },
+    // 多选框选中数据
+    handleSelectionChange(selection) {
+      this.ids = selection.map(item => item.versionId)
+      this.single = selection.length!==1
+      this.multiple = !selection.length
+    },
+    /** 新增按钮操作 */
+    handleAdd() {
+      this.reset();
+      this.open = true;
+      this.title = "添加软件升级版本信息";
+    },
+    /** 修改按钮操作 */
+    handleUpdate(row) {
+      this.reset();
+      const versionId = row.versionId || this.ids
+      getVersion(versionId).then(response => {
+        this.form = response.data;
+        this.open = true;
+        this.title = "修改软件升级版本信息";
+      });
+    },
+    /** 升级设备按钮 */
+    upgradeEquipment(row) {
+      this.reset();
+      const productId = row.productId || this.ids.toString()
+      console.log(productId)
+      // console.log(this.ids)
+      this.$router.push({path:'/manage/softwaredevicerelation',query: {id:productId}})
+    },
+    /** 提交按钮 */
+    submitForm() {
+      this.$refs["form"].validate(valid => {
+        if (valid) {
+          if (this.form.versionId != null) {
+            updateVersion(this.form).then(response => {
+              this.msgSuccess("修改成功");
+              this.open = false;
+              this.getList();
+            });
+          } else {
+            addVersion(this.form).then(response => {
+              this.msgSuccess("新增成功");
+              this.open = false;
+              this.getList();
+            });
+          }
+        }
+      });
+    },
+    /** 删除按钮操作 */
+    handleDelete(row) {
+      const versionIds = row.versionId || this.ids;
+      this.$confirm('是否确认删除软件升级版本信息编号为"' + versionIds + '"的数据项?', "警告", {
+          confirmButtonText: "确定",
+          cancelButtonText: "取消",
+          type: "warning"
+        }).then(function() {
+          return delVersion(versionIds);
+        }).then(() => {
+          this.getList();
+          this.msgSuccess("删除成功");
+        })
+    },
+    /** 导出按钮操作 */
+    handleExport() {
+      const queryParams = this.queryParams;
+      this.$confirm('是否确认导出所有软件升级版本信息数据项?', "警告", {
+          confirmButtonText: "确定",
+          cancelButtonText: "取消",
+          type: "warning"
+        }).then(function() {
+          return exportVersion(queryParams);
+        }).then(response => {
+          this.download(response.msg);
+        })
+    }
+  }
+};
+</script>

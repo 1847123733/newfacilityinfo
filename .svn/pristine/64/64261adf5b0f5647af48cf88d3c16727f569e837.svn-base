@@ -1,0 +1,88 @@
+<template>
+  <div class="app-container">
+    <el-form :model="queryParams" ref="queryForm" :inline="true" v-show="showSearch" label-width="68px">
+      <el-form-item label="投放地点" prop="putPointId">
+        <el-select v-model="queryParams.putPointId" filterable placeholder="请选择投放地点">
+          <el-option
+            v-for="item in addressList"
+            :key="item.index"
+            :label="item.label"
+            :value="item.index">
+          </el-option>
+        </el-select>
+      </el-form-item>
+      <el-form-item style="margin-right: 100px">
+        <el-button type="info" plain>手动刷新</el-button>
+      </el-form-item>
+    </el-form>
+    <div class="monitoring-box">
+      <div class="monitoring-box-top">设备监控</div>
+      <div class="monitoring-box-box">
+        <monitor :list="item" v-for="item in deviceList"></monitor>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+  import { listPutpoint } from "@/api/manage/putpoint";
+  import { listDevice } from "@/api/manage/device";
+  import monitor from '@/views/components/devicemonitor/devicemonitor';
+  export default {
+    name: "device",
+    components:{
+      monitor
+    },
+    data(){
+      return{
+        // 查询条件
+        queryParams:{
+          putPointId:'5e98a1fbf97d403db5ca00242bacdabf'
+        },
+        // 显示搜索条件
+        showSearch: true,
+        // 投放地点
+        addressList:[],
+        // 对应投放地点相应设备
+        deviceList:[]
+      }
+    },
+    created() {
+      this.getddList()
+      this.getddshebList()
+    },
+    methods:{
+      // 请求投放地点
+      getddList() {
+        this.loading = true;
+        listPutpoint().then(response => {
+          let obj = {};
+          let arr = [];
+          for (let i = 0; i < response.rows.length; i++){
+            obj={};
+            obj.index =  response.rows[i].putPointId;
+            obj.label = response.rows[i].pointName;
+            arr.push(obj);
+          }
+          this.addressList = arr;
+          this.loading = false;
+        });
+      },
+      // 请求对应地点相应设备
+      getddshebList(){
+        this.loading = true;
+        listDevice(this.queryParams).then(response => {
+          this.deviceList = response.rows;
+          console.log(this.deviceList)
+          this.loading = false;
+        });
+      },
+    }
+  }
+</script>
+
+<style scoped>
+  .el-form{ display: flex;justify-content: space-between }
+  .monitoring-box-top{ width: 100%;border-bottom: 1px solid #ccc;padding: 5px 0px;box-sizing: border-box }
+  .monitoring-box-box{ padding: 10px ;box-sizing: border-box;display: flex;justify-content: space-around }
+</style>
